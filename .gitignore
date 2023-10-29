@@ -1,1 +1,4 @@
 .env/
+pipelines/__pycache__/
+quantization/__pycache__/
+utils/__pycache__

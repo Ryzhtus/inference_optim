@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from evaluate import evaluator
 from datasets import load_dataset
@@ -9,8 +10,40 @@ from transformers import (
     Trainer,
     set_seed,
 )
-from utils.ner_utils import tokenize_and_align_labels, compute_ner_metrics
+from utils.ner_utils import compute_ner_metrics
 from utils.memory import MemoryCallback
+
+
+def tokenize_and_align_labels(examples):
+    tokenizer = RobertaTokenizerFast.from_pretrained(
+        "roberta-base", add_prefix_space=True
+    )
+
+    tokenized_inputs = tokenizer(
+        examples["tokens"], truncation=True, is_split_into_words=True
+    )
+
+    labels = []
+    for i, label in enumerate(examples["ner_tags"]):
+        word_ids = tokenized_inputs.word_ids(
+            batch_index=i
+        )  # Map tokens to their respective word.
+        previous_word_idx = None
+        label_ids = []
+        for word_idx in word_ids:  # Set the special tokens to -100.
+            if word_idx is None:
+                label_ids.append(-100)
+            elif (
+                word_idx != previous_word_idx
+            ):  # Only label the first token of a given word.
+                label_ids.append(label[word_idx])
+            else:
+                label_ids.append(-100)
+            previous_word_idx = word_idx
+        labels.append(label_ids)
+
+    tokenized_inputs["labels"] = labels
+    return tokenized_inputs
 
 
 def roberta_pipeline():
@@ -18,7 +51,7 @@ def roberta_pipeline():
 
     conll2003 = load_dataset("conll2003")
     tokenizer = RobertaTokenizerFast.from_pretrained(
-        "roberta-large", add_prefix_space=True
+        "roberta-base", add_prefix_space=True
     )
     data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer)
     label_list = conll2003["train"].features["ner_tags"].feature.names
@@ -28,14 +61,14 @@ def roberta_pipeline():
     label2id = {label: idx for label, idx in zip(label_list, range(len(label_list)))}
 
     model = AutoModelForTokenClassification.from_pretrained(
-        "roberta-large",
+        "roberta-base",
         num_labels=len(label_list),
         id2label=id2label,
         label2id=label2id,
     )
 
     training_args = TrainingArguments(
-        output_dir="conll2003-roberta-large",
+        output_dir="conll2003-roberta-base",
         learning_rate=2e-5,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
@@ -46,7 +79,7 @@ def roberta_pipeline():
         load_best_model_at_end=True,
         push_to_hub=True,
         report_to="wandb",
-        run_name="ner-roberta",
+        run_name="ner-roberta-base",
     )
 
     trainer = Trainer(
@@ -61,6 +94,7 @@ def roberta_pipeline():
     )
 
     trainer.train()
+    trainer.push_to_hub()
 
     task_evaluator = evaluator("token-classification")
 
@@ -71,7 +105,11 @@ def roberta_pipeline():
         tokenizer=tokenizer,
     )
 
+    print(eval_results)
+
+    json_object = json.dumps(eval_results, indent=4, default=str)
+
     with open(
-        Path.cwd() / "results" / "ner_roberta_finetuning.log", "w"
+        Path.cwd() / "results" / "ner_roberta_finetuning.json", "w"
     ) as result_file:
-        result_file.write(eval_results)
+        result_file.write(json_object)
