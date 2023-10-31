@@ -11,7 +11,7 @@ from transformers import (
     set_seed,
 )
 from utils.ner_utils import compute_ner_metrics
-from utils.memory import MemoryCallback
+from utils.memory import MemoryCallback, print_size_of_model
 
 
 def tokenize_and_align_labels(examples):
@@ -46,7 +46,7 @@ def tokenize_and_align_labels(examples):
     return tokenized_inputs
 
 
-def roberta_pipeline():
+def distilled_roberta_pipeline():
     set_seed(42)
 
     conll2003 = load_dataset("conll2003")
@@ -68,7 +68,7 @@ def roberta_pipeline():
     )
 
     training_args = TrainingArguments(
-        output_dir="conll2003-distill-roberta-large",
+        output_dir="conll2003-distill-roberta-base",
         learning_rate=2e-5,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=16,
@@ -106,6 +106,7 @@ def roberta_pipeline():
     )
 
     print(eval_results)
+    print_size_of_model(model)
 
     json_object = json.dumps(eval_results, indent=4, default=str)
 

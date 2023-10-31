@@ -11,7 +11,7 @@ from transformers import (
     set_seed,
 )
 from utils.ner_utils import compute_ner_metrics
-from utils.memory import MemoryCallback
+from utils.memory import MemoryCallback, print_size_of_model
 
 
 def tokenize_and_align_labels(examples):
@@ -106,6 +106,7 @@ def roberta_pipeline():
     )
 
     print(eval_results)
+    print_size_of_model(model)
 
     json_object = json.dumps(eval_results, indent=4, default=str)
 
